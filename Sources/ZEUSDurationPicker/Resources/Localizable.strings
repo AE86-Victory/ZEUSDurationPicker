@@ -1,0 +1,13 @@
+/* DurationPicker module strings - unit label is shown next to the number column, so use short form (no %d). */
+"hour_a11y_label" = "hours";
+"minute_a11y_label" = "minutes";
+"second_a11y_label" = "seconds";
+"hour_zero" = "HR";
+"hour_singular" = "HR";
+"hour_plural" = "HR";
+"minute_zero" = "MIN";
+"minute_singular" = "MIN";
+"minute_plural" = "MIN";
+"second_zero" = "SEC";
+"second_singular" = "SEC";
+"second_plural" = "SEC";
