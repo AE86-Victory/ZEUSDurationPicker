@@ -155,6 +155,15 @@ final class InternalDurationPickerView: UIPickerView, UIPickerViewDataSource, UI
     didSet { reloadAllComponents(); refreshDurationRange(); setNeedsLayout() }
   }
 
+  /// When true, selecting the maximum hour collapses minute/second rows to only `00`.
+  /// Useful for caps like `24:00` where `24:05+` should be impossible.
+  var collapsesSubhourComponentsAtMaximumHour: Bool = true {
+    didSet { reloadAllComponents(); refreshDurationRange(); setNeedsLayout() }
+  }
+
+  /// Cross-fade duration (seconds) used when minute/second columns collapse/expand.
+  var maximumHourTransitionDuration: TimeInterval = 0.18
+
   /// When true, hides the default selection indicator (the rounded bar behind the selected row).
   var hidesSelectionIndicator: Bool = false {
     didSet { setNeedsLayout() }
@@ -311,14 +320,24 @@ final class InternalDurationPickerView: UIPickerView, UIPickerViewDataSource, UI
 
   func setDuration(_ duration: Int,
                    animated: Bool) {
-    timeComponents = TimeComponents.components(
-      fromDuration: duration,
-      pickerMode: pickerMode,
-      minimumDuration: minimumDurationComponents.duration,
-      maximumDuration: maximumDurationComponents.duration,
-      hourInterval: hourInterval,
-      minuteInterval: minuteInterval,
-      secondInterval: secondInterval)
+    let previousComponents = timeComponents
+    let clampedDuration = duration.clamped(
+      to: minimumDurationComponents.duration...maximumDurationComponents.duration)
+    if shouldRepresentAs24HourBoundary(clampedDuration) {
+      timeComponents = TimeComponents(
+        uncheckedHour: NumberOfHours,
+        uncheckedMinute: 0,
+        uncheckedSecond: 0)
+    } else {
+      timeComponents = TimeComponents.components(
+        fromDuration: clampedDuration,
+        pickerMode: pickerMode,
+        minimumDuration: minimumDurationComponents.duration,
+        maximumDuration: maximumDurationComponents.duration,
+        hourInterval: hourInterval,
+        minuteInterval: minuteInterval,
+        secondInterval: secondInterval)
+    }
 
     // Set unit label text in case the text may have changed, e.g. "hour" to "hours"
     setUnitLabelsText()
@@ -348,6 +367,10 @@ final class InternalDurationPickerView: UIPickerView, UIPickerViewDataSource, UI
         inComponent: secondComponent,
         animated: animated)
     }
+
+    refreshDependentComponents(
+      from: previousComponents,
+      animated: animated)
   }
 
   private func refreshDuration() {
@@ -368,8 +391,11 @@ final class InternalDurationPickerView: UIPickerView, UIPickerViewDataSource, UI
         hourInterval: hourInterval,
         minuteInterval: minuteInterval,
         secondInterval: secondInterval)
+      let effectiveAbsoluteMaximum = canRepresent24HourBoundary()
+      ? max(absoluteMaximum, OneDay)
+      : absoluteMaximum
       let isValidRange = maximum >= 0
-      && minimum <= absoluteMaximum
+      && minimum <= effectiveAbsoluteMaximum
       && minimum <= maximum
       if isValidRange {
         minimumDurationComponents = makeMinimumDurationComponents(fromMinimum: minimum)
@@ -430,6 +456,12 @@ final class InternalDurationPickerView: UIPickerView, UIPickerViewDataSource, UI
     let maxH = maximumHour ?? TimeUtils.maximumNumberOfHours(
       forPickerMode: pickerMode,
       hourInterval: hourInterval)
+    if maxH >= NumberOfHours, canRepresent24HourBoundary() {
+      return TimeComponents(
+        uncheckedHour: NumberOfHours,
+        uncheckedMinute: 0,
+        uncheckedSecond: 0)
+    }
     return TimeComponents(
       uncheckedHour: maxH,
       uncheckedMinute: TimeUtils.maximumNumberOfMinutes(
@@ -443,6 +475,12 @@ final class InternalDurationPickerView: UIPickerView, UIPickerViewDataSource, UI
   private func makeMaximumDurationComponents(fromMaximum maximum: Int) -> TimeComponents {
     guard maximum >= 0 else {
       return makeAbsoluteMaximumDurationComponents()
+    }
+    if maximum >= OneDay, canRepresent24HourBoundary() {
+      return TimeComponents(
+        uncheckedHour: NumberOfHours,
+        uncheckedMinute: 0,
+        uncheckedSecond: 0)
     }
     return .components(
       fromDuration: maximum,
@@ -528,6 +566,65 @@ final class InternalDurationPickerView: UIPickerView, UIPickerViewDataSource, UI
     // Reset the duration range so that the minimum and maximum components use the new interval
     // Note: This will also call setDuration(:animated:) using the new interval, so we don't explictly call it here
     refreshDurationRange()
+  }
+
+  private func canRepresent24HourBoundary() -> Bool {
+    guard collapsesSubhourComponentsAtMaximumHour else { return false }
+    guard pickerMode.hourComponent != nil else { return false }
+    return hourInterval == 1
+  }
+
+  private func shouldRepresentAs24HourBoundary(_ duration: Int) -> Bool {
+    canRepresent24HourBoundary()
+    && maximumDurationComponents.hour == NumberOfHours
+    && duration >= OneDay
+  }
+
+  private func shouldRestrictMinuteComponentToZero(for components: TimeComponents? = nil) -> Bool {
+    guard pickerMode.minuteComponent != nil else { return false }
+    let components = components ?? timeComponents
+    return canRepresent24HourBoundary()
+    && maximumDurationComponents.hour == NumberOfHours
+    && components.hour >= NumberOfHours
+  }
+
+  private func shouldRestrictSecondComponentToZero(for components: TimeComponents? = nil) -> Bool {
+    guard pickerMode.secondComponent != nil else { return false }
+    let components = components ?? timeComponents
+    return shouldRestrictMinuteComponentToZero(for: components)
+    && components.minute == 0
+  }
+
+  private func refreshDependentComponents(from previousComponents: TimeComponents,
+                                          animated: Bool) {
+    let minuteWasRestricted = shouldRestrictMinuteComponentToZero(for: previousComponents)
+    let secondWasRestricted = shouldRestrictSecondComponentToZero(for: previousComponents)
+    let minuteIsRestricted = shouldRestrictMinuteComponentToZero(for: timeComponents)
+    let secondIsRestricted = shouldRestrictSecondComponentToZero(for: timeComponents)
+    let restrictionChanged = minuteWasRestricted != minuteIsRestricted
+    || secondWasRestricted != secondIsRestricted
+
+    let reloadBlock = { [weak self] in
+      guard let self else { return }
+      if let minuteComponent = self.pickerMode.minuteComponent {
+        self.reloadComponent(minuteComponent)
+      }
+      if let secondComponent = self.pickerMode.secondComponent {
+        self.reloadComponent(secondComponent)
+      }
+      self.layoutIfNeeded()
+    }
+
+    if restrictionChanged && animated {
+      UIView.transition(
+        with: self,
+        duration: maximumHourTransitionDuration,
+        options: [.transitionCrossDissolve, .allowAnimatedContent, .beginFromCurrentState],
+        animations: reloadBlock
+      )
+    } else {
+      reloadBlock()
+    }
   }
 
   // MARK: - UIPickerViewDelegate
@@ -663,18 +760,14 @@ final class InternalDurationPickerView: UIPickerView, UIPickerViewDataSource, UI
     }
     switch componentType {
     case .hour:
-      // If hour is selected, reload minute and second components since the mute states may have changed
-      if let minuteComponent = pickerMode.minuteComponent {
-        reloadComponent(minuteComponent)
-      }
-      if let secondComponent = pickerMode.secondComponent {
-        reloadComponent(secondComponent)
-      }
-
       // Set rows
       let hours = value(
         forRow: row,
         inComponent: component)
+      if hours >= NumberOfHours, canRepresent24HourBoundary() {
+        setDuration(OneDay, animated: true)
+        return
+      }
       let newDuration = TimeUtils.seconds(
         fromHours: hours,
         minutes: selectedRow(forComponentType: .minute),
@@ -683,11 +776,6 @@ final class InternalDurationPickerView: UIPickerView, UIPickerViewDataSource, UI
         newDuration,
         animated: true)
     case .minute:
-      // If minute is selected, reload second component since the mute state may have changed
-      if let secondComponent = pickerMode.secondComponent {
-        reloadComponent(secondComponent)
-      }
-
       // Set rows
       let minutes = value(
         forRow: row,
@@ -784,8 +872,14 @@ final class InternalDurationPickerView: UIPickerView, UIPickerViewDataSource, UI
       }
       return NumberOfHours / hourInterval
     case .minute:
+      if shouldRestrictMinuteComponentToZero() {
+        return 1
+      }
       return NumberOfMinutes / minuteInterval
     case .second:
+      if shouldRestrictSecondComponentToZero() {
+        return 1
+      }
       return NumberOfSeconds / secondInterval
     }
   }

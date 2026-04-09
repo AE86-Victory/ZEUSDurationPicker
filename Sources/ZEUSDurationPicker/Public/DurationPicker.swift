@@ -234,6 +234,20 @@ open class DurationPicker: UIControl {
     set { pickerView.maximumHour = newValue }
   }
 
+  /// When true, selecting the maximum hour collapses minute/second rows to only `00`.
+  /// Default is `true`.
+  public var collapsesSubhourComponentsAtMaximumHour: Bool {
+    get { pickerView.collapsesSubhourComponentsAtMaximumHour }
+    set { pickerView.collapsesSubhourComponentsAtMaximumHour = newValue }
+  }
+
+  /// Cross-fade duration (seconds) used when minute/second columns collapse/expand at maximum hour.
+  /// Default is `0.18`.
+  public var maximumHourTransitionDuration: TimeInterval {
+    get { pickerView.maximumHourTransitionDuration }
+    set { pickerView.maximumHourTransitionDuration = max(0, newValue) }
+  }
+
   /// When true, hides the default selection indicator (the rounded bar behind the selected row).
   public var hidesSelectionIndicator: Bool {
     get { pickerView.hidesSelectionIndicator }

@@ -37,7 +37,8 @@ struct TimeComponents: Equatable {
     case down
   }
 
-  /// An integer representing the hour component of the duration picker. Between 0 and 23.
+  /// An integer representing the hour component of the duration picker. Between 0 and 23,
+  /// or 24 only when both minute and second are 0.
   var hour: Int
 
   /// An integer representing the minute component of the duration picker. Between 0 and 59.
@@ -57,15 +58,17 @@ struct TimeComponents: Equatable {
   /// Creates a ``TimeComponents`` instance with the provided hour, minute, and second components.
   ///
   /// - Parameters:
-  ///   - uncheckedHour: The hour component. must be within 0 and 23.
+  ///   - uncheckedHour: The hour component. Must be within 0 and 23, or 24 when minute and second are both 0.
   ///   - uncheckedMinute: The minute component, must be within 0 and 59.
   ///   - uncheckedSecond: The second component, must be within 0 and 59.
   init(uncheckedHour: Int = 0,
        uncheckedMinute: Int = 0,
        uncheckedSecond: Int = 0) {
+    let isValidHour = (0..<NumberOfHours).contains(uncheckedHour)
+    || (uncheckedHour == NumberOfHours && uncheckedMinute == 0 && uncheckedSecond == 0)
     precondition(
-      (0..<NumberOfHours).contains(uncheckedHour),
-      "Hour not in the range [0, \(NumberOfHours)]")
+      isValidHour,
+      "Hour not in the range [0, \(NumberOfHours)] unless minute/second are both 0")
     precondition(
       (0..<NumberOfMinutes).contains(uncheckedMinute),
       "Minute not in the range [0, \(NumberOfMinutes)]")

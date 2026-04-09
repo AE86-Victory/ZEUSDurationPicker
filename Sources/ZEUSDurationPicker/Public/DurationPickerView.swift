@@ -119,6 +119,12 @@ public struct DurationPickerView: UIViewRepresentable {
     /// When set, the hour column only shows 0...this value (e.g. 12). Nil = 0–23.
     public var maximumHour: Int?
 
+    /// When true, selecting the maximum hour collapses minute/second rows to only `00`.
+    public var collapsesSubhourComponentsAtMaximumHour: Bool
+
+    /// Cross-fade duration (seconds) used when minute/second columns collapse/expand at maximum hour.
+    public var maximumHourTransitionDuration: TimeInterval
+
     /// When true, hides the selection indicator (rounded bar behind the selected row).
     public var hidesSelectionIndicator: Bool
 
@@ -143,6 +149,8 @@ public struct DurationPickerView: UIViewRepresentable {
         labelToUnitSpacing: CGFloat = 6,
         rowHeight: CGFloat = 32,
         maximumHour: Int? = nil,
+        collapsesSubhourComponentsAtMaximumHour: Bool = true,
+        maximumHourTransitionDuration: TimeInterval = 0.18,
         hidesSelectionIndicator: Bool = false
     ) {
         self._duration = duration
@@ -160,6 +168,8 @@ public struct DurationPickerView: UIViewRepresentable {
         self.labelToUnitSpacing = labelToUnitSpacing
         self.rowHeight = rowHeight
         self.maximumHour = maximumHour
+        self.collapsesSubhourComponentsAtMaximumHour = collapsesSubhourComponentsAtMaximumHour
+        self.maximumHourTransitionDuration = max(0, maximumHourTransitionDuration)
         self.hidesSelectionIndicator = hidesSelectionIndicator
     }
     
@@ -186,6 +196,8 @@ public struct DurationPickerView: UIViewRepresentable {
         picker.labelToUnitSpacing = labelToUnitSpacing
         picker.rowHeight = rowHeight
         picker.maximumHour = maximumHour
+        picker.collapsesSubhourComponentsAtMaximumHour = collapsesSubhourComponentsAtMaximumHour
+        picker.maximumHourTransitionDuration = maximumHourTransitionDuration
         picker.hidesSelectionIndicator = hidesSelectionIndicator
 
         // Set up action handler
@@ -258,6 +270,12 @@ public struct DurationPickerView: UIViewRepresentable {
         }
         if picker.maximumHour != maximumHour {
             picker.maximumHour = maximumHour
+        }
+        if picker.collapsesSubhourComponentsAtMaximumHour != collapsesSubhourComponentsAtMaximumHour {
+            picker.collapsesSubhourComponentsAtMaximumHour = collapsesSubhourComponentsAtMaximumHour
+        }
+        if abs(picker.maximumHourTransitionDuration - maximumHourTransitionDuration) > 0.0001 {
+            picker.maximumHourTransitionDuration = maximumHourTransitionDuration
         }
         if picker.hidesSelectionIndicator != hidesSelectionIndicator {
             picker.hidesSelectionIndicator = hidesSelectionIndicator
@@ -389,6 +407,20 @@ extension DurationPickerView {
     public func maximumHour(_ hour: Int?) -> DurationPickerView {
         var view = self
         view.maximumHour = hour
+        return view
+    }
+
+    /// Whether to collapse minute/second rows to `00` when the selected hour reaches `maximumHour`.
+    public func collapsesSubhourComponentsAtMaximumHour(_ enabled: Bool = true) -> DurationPickerView {
+        var view = self
+        view.collapsesSubhourComponentsAtMaximumHour = enabled
+        return view
+    }
+
+    /// Sets the cross-fade duration (seconds) for minute/second collapse/expand at maximum hour.
+    public func maximumHourTransitionDuration(_ duration: TimeInterval) -> DurationPickerView {
+        var view = self
+        view.maximumHourTransitionDuration = max(0, duration)
         return view
     }
 
